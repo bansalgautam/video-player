@@ -1,8 +1,18 @@
 {
+  "functions": {
+    "api/proxy.ts": {
+      "maxDuration": 30,
+      "regions": ["bom1"]
+    }
+  },
   "rewrites": [
     {
       "source": "/api/proxy",
       "destination": "/api/proxy"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
     }
   ]
 }
