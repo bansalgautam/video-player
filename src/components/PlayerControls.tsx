@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useState, useEffect } from "react";
 import type { VideoPlayerState } from "../hooks/useVideoPlayer";
 import { SpeedControl } from "./SpeedControl";
 import { SubtitleControl } from "./SubtitleControl";
@@ -18,6 +18,11 @@ function formatTime(seconds: number): string {
 interface PlayerControlsProps {
   state: VideoPlayerState;
   speedOptions: number[];
+  previewUrl: string | null;
+  previewTime: number;
+  onPreviewGenerate: (time: number) => void;
+  onPreviewClear: () => void;
+  seekPreviewTime: number | null;
   actions: {
     togglePlay: () => void;
     seek: (time: number) => void;
@@ -34,12 +39,120 @@ interface PlayerControlsProps {
 export function PlayerControls({
   state,
   speedOptions,
+  previewUrl,
+  previewTime,
+  onPreviewGenerate,
+  onPreviewClear,
+  seekPreviewTime,
   actions,
 }: PlayerControlsProps) {
   const progressRef = useRef<HTMLDivElement>(null);
   const volumeRef = useRef<HTMLDivElement>(null);
+  const [hoverPercent, setHoverPercent] = useState<number | null>(null);
+  const isDraggingRef = useRef(false);
+  const wasPlayingRef = useRef(false);
 
-  const handleProgressClick = useCallback(
+  const getProgressRatio = useCallback(
+    (clientX: number) => {
+      const bar = progressRef.current;
+      if (!bar || !state.duration) return null;
+      const rect = bar.getBoundingClientRect();
+      return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    },
+    [state.duration],
+  );
+
+  // Drag: mousedown starts dragging
+  const handleProgressMouseDown = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      const ratio = getProgressRatio(e.clientX);
+      if (ratio === null) return;
+
+      isDraggingRef.current = true;
+      wasPlayingRef.current = state.isPlaying;
+
+      // Pause during drag for smooth scrubbing
+      const video = document.querySelector<HTMLVideoElement>(".vp-video");
+      if (video && !video.paused) video.pause();
+
+      actions.seek(ratio * state.duration);
+    },
+    [getProgressRatio, state.duration, state.isPlaying, actions],
+  );
+
+  // Drag: mousemove while dragging
+  useEffect(() => {
+    const onMouseMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      const ratio = getProgressRatio(e.clientX);
+      if (ratio === null) return;
+      actions.seek(ratio * state.duration);
+      setHoverPercent(ratio * 100);
+      onPreviewGenerate(ratio * state.duration);
+    };
+
+    const onMouseUp = (e: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      isDraggingRef.current = false;
+      const ratio = getProgressRatio(e.clientX);
+      if (ratio !== null) {
+        actions.seek(ratio * state.duration);
+      }
+      // Resume playback if it was playing before drag
+      if (wasPlayingRef.current) {
+        const video = document.querySelector<HTMLVideoElement>(".vp-video");
+        video?.play();
+      }
+    };
+
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("mouseup", onMouseUp);
+    return () => {
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("mouseup", onMouseUp);
+    };
+  }, [getProgressRatio, state.duration, actions, onPreviewGenerate]);
+
+  // Touch drag support for mobile/TV
+  const handleProgressTouchStart = useCallback(
+    (e: React.TouchEvent<HTMLDivElement>) => {
+      const touch = e.touches[0];
+      const ratio = getProgressRatio(touch.clientX);
+      if (ratio === null) return;
+
+      isDraggingRef.current = true;
+      wasPlayingRef.current = state.isPlaying;
+
+      const video = document.querySelector<HTMLVideoElement>(".vp-video");
+      if (video && !video.paused) video.pause();
+
+      actions.seek(ratio * state.duration);
+    },
+    [getProgressRatio, state.duration, state.isPlaying, actions],
+  );
+
+  const handleProgressTouchMove = useCallback(
+    (e: React.TouchEvent<HTMLDivElement>) => {
+      if (!isDraggingRef.current) return;
+      const touch = e.touches[0];
+      const ratio = getProgressRatio(touch.clientX);
+      if (ratio === null) return;
+      actions.seek(ratio * state.duration);
+    },
+    [getProgressRatio, state.duration, actions],
+  );
+
+  const handleProgressTouchEnd = useCallback(() => {
+    if (!isDraggingRef.current) return;
+    isDraggingRef.current = false;
+    if (wasPlayingRef.current) {
+      const video = document.querySelector<HTMLVideoElement>(".vp-video");
+      video?.play();
+    }
+  }, []);
+
+  const handleProgressHover = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
       const bar = progressRef.current;
       if (!bar || !state.duration) return;
@@ -48,10 +161,16 @@ export function PlayerControls({
         0,
         Math.min(1, (e.clientX - rect.left) / rect.width),
       );
-      actions.seek(ratio * state.duration);
+      setHoverPercent(ratio * 100);
+      onPreviewGenerate(ratio * state.duration);
     },
-    [state.duration, actions],
+    [state.duration, onPreviewGenerate],
   );
+
+  const handleProgressLeave = useCallback(() => {
+    setHoverPercent(null);
+    onPreviewClear();
+  }, [onPreviewClear]);
 
   const handleVolumeClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
@@ -87,14 +206,46 @@ export function PlayerControls({
   const progressPercent =
     state.duration > 0 ? (state.currentTime / state.duration) * 100 : 0;
 
+  // Determine which preview to show: seek preview (arrow keys/buttons) or hover preview
+  const showSeekPreview = seekPreviewTime !== null;
+  const activePreviewTime = showSeekPreview ? seekPreviewTime : previewTime;
+  const activePreviewPercent =
+    showSeekPreview && state.duration > 0
+      ? (seekPreviewTime / state.duration) * 100
+      : hoverPercent;
+
   return (
     <div className="vp-controls">
       {/* Progress bar */}
       <div
         className="vp-progress-container"
         ref={progressRef}
-        onClick={handleProgressClick}
+        onMouseDown={handleProgressMouseDown}
+        onMouseMove={handleProgressHover}
+        onMouseLeave={handleProgressLeave}
+        onTouchStart={handleProgressTouchStart}
+        onTouchMove={handleProgressTouchMove}
+        onTouchEnd={handleProgressTouchEnd}
       >
+        {/* Preview tooltip */}
+        {(hoverPercent !== null || showSeekPreview) &&
+          activePreviewPercent !== null && (
+            <div
+              className="vp-preview-tooltip"
+              style={{ left: `${activePreviewPercent}%` }}
+            >
+              {previewUrl && (
+                <img
+                  className="vp-preview-img"
+                  src={previewUrl}
+                  alt="Preview"
+                />
+              )}
+              <span className="vp-preview-time">
+                {formatTime(activePreviewTime)}
+              </span>
+            </div>
+          )}
         <div className="vp-progress-bar">
           <div
             className="vp-progress-buffered"
@@ -114,6 +265,27 @@ export function PlayerControls({
       {/* Controls row */}
       <div className="vp-controls-row">
         <div className="vp-controls-left">
+          {/* Rewind 10s */}
+          <button
+            className="vp-control-btn"
+            onClick={() => actions.seek(state.currentTime - 10)}
+            title="Rewind 10s"
+          >
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+              <path d="M11.99 5V1l-5 5 5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6h-2c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z" />
+              <text
+                x="12"
+                y="15.5"
+                textAnchor="middle"
+                fontSize="7.5"
+                fontWeight="700"
+                fontFamily="sans-serif"
+              >
+                10
+              </text>
+            </svg>
+          </button>
+
           {/* Play / Pause */}
           <button
             className="vp-control-btn"
@@ -139,6 +311,27 @@ export function PlayerControls({
                 <path d="M8 5v14l11-7z" />
               </svg>
             )}
+          </button>
+
+          {/* Forward 10s */}
+          <button
+            className="vp-control-btn"
+            onClick={() => actions.seek(state.currentTime + 10)}
+            title="Forward 10s"
+          >
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+              <path d="M12.01 5V1l5 5-5 5V7c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6h2c0 4.42-3.58 8-8 8s-8-3.58-8-8 3.58-8 8-8z" />
+              <text
+                x="12"
+                y="15.5"
+                textAnchor="middle"
+                fontSize="7.5"
+                fontWeight="700"
+                fontFamily="sans-serif"
+              >
+                10
+              </text>
+            </svg>
           </button>
 
           {/* Volume */}

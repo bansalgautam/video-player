@@ -65,12 +65,42 @@ export function useVideoPlayer(src: string) {
     }
   }, []);
 
+  function updateHlsAudioTracks() {
+    const hls = hlsRef.current;
+    if (!hls) return;
+    const tracks: AudioTrackInfo[] = hls.audioTracks.map((t, i) => ({
+      id: i,
+      name: t.name || `Track ${i + 1}`,
+      lang: t.lang || "",
+    }));
+    setState((s) => ({
+      ...s,
+      audioTracks: tracks,
+      activeAudioTrack: hls.audioTrack,
+    }));
+  }
+
+  function updateHlsSubtitleTracks() {
+    const hls = hlsRef.current;
+    if (!hls) return;
+    const tracks: SubtitleTrackInfo[] = hls.subtitleTracks.map((t, i) => ({
+      id: i,
+      label: t.name || `Subtitle ${i + 1}`,
+      language: t.lang || "",
+      mode: "disabled" as TextTrackMode,
+    }));
+    setState((s) => ({
+      ...s,
+      subtitleTracks: tracks,
+      activeSubtitleTrack: hls.subtitleTrack,
+    }));
+  }
+
   // Initialize video source
   useEffect(() => {
     const video = videoRef.current;
     if (!video) return;
 
-    setState((s) => ({ ...s, isLoading: true, error: null }));
     destroyHls();
 
     if (isHls && Hls.isSupported()) {
@@ -139,37 +169,6 @@ export function useVideoPlayer(src: string) {
       destroyHls();
     };
   }, [src, isHls, destroyHls]);
-
-  function updateHlsAudioTracks() {
-    const hls = hlsRef.current;
-    if (!hls) return;
-    const tracks: AudioTrackInfo[] = hls.audioTracks.map((t, i) => ({
-      id: i,
-      name: t.name || `Track ${i + 1}`,
-      lang: t.lang || "",
-    }));
-    setState((s) => ({
-      ...s,
-      audioTracks: tracks,
-      activeAudioTrack: hls.audioTrack,
-    }));
-  }
-
-  function updateHlsSubtitleTracks() {
-    const hls = hlsRef.current;
-    if (!hls) return;
-    const tracks: SubtitleTrackInfo[] = hls.subtitleTracks.map((t, i) => ({
-      id: i,
-      label: t.name || `Subtitle ${i + 1}`,
-      language: t.lang || "",
-      mode: "disabled" as TextTrackMode,
-    }));
-    setState((s) => ({
-      ...s,
-      subtitleTracks: tracks,
-      activeSubtitleTrack: hls.subtitleTrack,
-    }));
-  }
 
   // Sync native text tracks (for non-HLS sources like MP4 with <track> elements)
   useEffect(() => {
@@ -267,6 +266,8 @@ export function useVideoPlayer(src: string) {
 
     const onPlay = () => setState((s) => ({ ...s, isPlaying: true }));
     const onPause = () => setState((s) => ({ ...s, isPlaying: false }));
+    const onLoadStart = () =>
+      setState((s) => ({ ...s, isLoading: true, error: null }));
     const onTimeUpdate = () =>
       setState((s) => ({ ...s, currentTime: video.currentTime }));
     const onDurationChange = () =>
@@ -296,6 +297,7 @@ export function useVideoPlayer(src: string) {
 
     video.addEventListener("play", onPlay);
     video.addEventListener("pause", onPause);
+    video.addEventListener("loadstart", onLoadStart);
     video.addEventListener("timeupdate", onTimeUpdate);
     video.addEventListener("durationchange", onDurationChange);
     video.addEventListener("volumechange", onVolumeChange);
@@ -307,6 +309,7 @@ export function useVideoPlayer(src: string) {
     return () => {
       video.removeEventListener("play", onPlay);
       video.removeEventListener("pause", onPause);
+      video.removeEventListener("loadstart", onLoadStart);
       video.removeEventListener("timeupdate", onTimeUpdate);
       video.removeEventListener("durationchange", onDurationChange);
       video.removeEventListener("volumechange", onVolumeChange);
@@ -329,6 +332,50 @@ export function useVideoPlayer(src: string) {
     return () =>
       document.removeEventListener("fullscreenchange", onFullscreenChange);
   }, []);
+
+  // Wake Lock: prevent device from sleeping while video is playing
+  useEffect(() => {
+    if (!("wakeLock" in navigator)) return;
+
+    let wakeLock: WakeLockSentinel | null = null;
+
+    const requestWakeLock = async () => {
+      try {
+        wakeLock = await navigator.wakeLock.request("screen");
+        wakeLock.addEventListener("release", () => {
+          wakeLock = null;
+        });
+      } catch {
+        // Wake lock request failed (e.g. low battery, background tab)
+      }
+    };
+
+    const releaseWakeLock = async () => {
+      if (wakeLock) {
+        await wakeLock.release();
+        wakeLock = null;
+      }
+    };
+
+    if (state.isPlaying) {
+      requestWakeLock();
+    } else {
+      releaseWakeLock();
+    }
+
+    // Re-acquire wake lock when tab becomes visible again
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible" && state.isPlaying) {
+        requestWakeLock();
+      }
+    };
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      releaseWakeLock();
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [state.isPlaying]);
 
   // Actions
   const togglePlay = useCallback(() => {

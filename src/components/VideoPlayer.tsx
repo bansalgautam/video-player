@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useVideoPlayer } from "../hooks/useVideoPlayer";
+import { useThumbnailPreview } from "../hooks/useThumbnailPreview";
 import { PlayerControls } from "./PlayerControls";
 import "./VideoPlayer.css";
 
@@ -10,31 +11,59 @@ interface VideoPlayerProps {
 export function VideoPlayer({ src }: VideoPlayerProps) {
   const { videoRef, containerRef, state, actions, speedOptions } =
     useVideoPlayer(src);
-  const [controlsVisible, setControlsVisible] = useState(true);
+  const { previewUrl, previewTime, generatePreview, clearPreview } =
+    useThumbnailPreview(videoRef, state.duration);
   const hideTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const seekPreviewTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  const [controlsTimerHidden, setControlsTimerHidden] = useState(false);
+  const [seekPreviewTime, setSeekPreviewTime] = useState<number | null>(null);
+
+  const controlsVisible = !state.isPlaying || !controlsTimerHidden;
 
   const showControls = useCallback(() => {
-    setControlsVisible(true);
+    setControlsTimerHidden(false);
     clearTimeout(hideTimerRef.current);
     hideTimerRef.current = setTimeout(() => {
-      if (state.isPlaying) {
-        setControlsVisible(false);
-      }
+      setControlsTimerHidden(true);
     }, 3000);
-  }, [state.isPlaying]);
+  }, []);
 
-  // Show controls when paused
+  // When video pauses, show controls and clear hide timer
   useEffect(() => {
-    if (!state.isPlaying) {
-      setControlsVisible(true);
+    const video = videoRef.current;
+    if (!video) return;
+
+    const onPause = () => {
       clearTimeout(hideTimerRef.current);
-    }
-  }, [state.isPlaying]);
+      setControlsTimerHidden(false);
+    };
+
+    video.addEventListener("pause", onPause);
+    return () => video.removeEventListener("pause", onPause);
+  }, [videoRef]);
 
   // Cleanup timer
   useEffect(() => {
-    return () => clearTimeout(hideTimerRef.current);
+    return () => {
+      clearTimeout(hideTimerRef.current);
+      clearTimeout(seekPreviewTimerRef.current);
+    };
   }, []);
+
+  // Show a seek preview for a brief time after seeking via keys/buttons
+  const showSeekPreview = useCallback(
+    (time: number) => {
+      const clampedTime = Math.max(0, Math.min(time, state.duration));
+      setSeekPreviewTime(clampedTime);
+      generatePreview(clampedTime);
+      clearTimeout(seekPreviewTimerRef.current);
+      seekPreviewTimerRef.current = setTimeout(() => {
+        setSeekPreviewTime(null);
+      }, 1000);
+    },
+    [state.duration, generatePreview],
+  );
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -50,12 +79,20 @@ export function VideoPlayer({ src }: VideoPlayerProps) {
           break;
         case "arrowleft":
           e.preventDefault();
-          actions.seek(state.currentTime - 5);
+          {
+            const newTime = state.currentTime - 5;
+            actions.seek(newTime);
+            showSeekPreview(newTime);
+          }
           showControls();
           break;
         case "arrowright":
           e.preventDefault();
-          actions.seek(state.currentTime + 5);
+          {
+            const newTime = state.currentTime + 5;
+            actions.seek(newTime);
+            showSeekPreview(newTime);
+          }
           showControls();
           break;
         case "arrowup":
@@ -81,7 +118,7 @@ export function VideoPlayer({ src }: VideoPlayerProps) {
 
     window.addEventListener("keydown", handleKey);
     return () => window.removeEventListener("keydown", handleKey);
-  }, [actions, state.currentTime, state.volume, showControls]);
+  }, [actions, state.currentTime, state.volume, showControls, showSeekPreview]);
 
   const isHls = /\.m3u8($|\?)/.test(src);
 
@@ -91,7 +128,7 @@ export function VideoPlayer({ src }: VideoPlayerProps) {
       ref={containerRef}
       onMouseMove={showControls}
       onMouseLeave={() => {
-        if (state.isPlaying) setControlsVisible(false);
+        if (state.isPlaying) setControlsTimerHidden(true);
       }}
     >
       <video
@@ -99,6 +136,7 @@ export function VideoPlayer({ src }: VideoPlayerProps) {
         className="vp-video"
         onClick={actions.togglePlay}
         playsInline
+        preload="auto"
         {...(isHls ? { crossOrigin: "anonymous" as const } : {})}
       />
 
@@ -146,6 +184,11 @@ export function VideoPlayer({ src }: VideoPlayerProps) {
       <PlayerControls
         state={state}
         speedOptions={speedOptions}
+        previewUrl={previewUrl}
+        previewTime={previewTime}
+        onPreviewGenerate={generatePreview}
+        onPreviewClear={clearPreview}
+        seekPreviewTime={seekPreviewTime}
         actions={actions}
       />
     </div>
