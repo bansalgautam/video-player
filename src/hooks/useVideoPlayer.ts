@@ -141,9 +141,24 @@ export function useVideoPlayer(src: string) {
       hls.on(Hls.Events.ERROR, (_event, data) => {
         if (data.fatal) {
           switch (data.type) {
-            case Hls.ErrorTypes.NETWORK_ERROR:
-              hls.startLoad();
+            case Hls.ErrorTypes.NETWORK_ERROR: {
+              const status = data.response?.code;
+              if (status && status >= 400 && status < 500) {
+                // HTTP 4xx from the proxy/upstream means auth failure (token expired, IP mismatch, etc.)
+                const isProxied = src.includes("/api/proxy");
+                const message = isProxied
+                  ? `Stream rejected (HTTP ${status}). The CDN likely validates your IP address, which doesn't match the proxy server's IP. Run the app locally (pnpm dev) to stream IP-restricted content.`
+                  : `Stream returned HTTP ${status}. The URL may require authentication or has expired.`;
+                setState((s) => ({
+                  ...s,
+                  error: message,
+                  isLoading: false,
+                }));
+              } else {
+                hls.startLoad();
+              }
               break;
+            }
             case Hls.ErrorTypes.MEDIA_ERROR:
               hls.recoverMediaError();
               break;

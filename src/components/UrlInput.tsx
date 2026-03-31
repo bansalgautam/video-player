@@ -139,8 +139,18 @@ export function UrlInput({ onLoad }: UrlInputProps) {
               )}
               {headerCount > 0 && (
                 <p className="curl-proxy-notice">
-                  Requests will be proxied through the dev server to attach
-                  these headers.
+                  Requests will be proxied to attach these headers.
+                  {typeof window !== "undefined" &&
+                    !["localhost", "127.0.0.1"].includes(
+                      window.location.hostname,
+                    ) && (
+                      <span className="curl-ip-warning">
+                        {" "}
+                        ⚠ IP-restricted streams (e.g. Hotstar) won't work on
+                        deployed versions — the CDN validates your IP. Run
+                        locally (<code>pnpm dev</code>) for these streams.
+                      </span>
+                    )}
                 </p>
               )}
             </div>

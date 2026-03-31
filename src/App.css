@@ -311,6 +311,20 @@
   font-style: italic;
 }
 
+.curl-ip-warning {
+  color: #f59e0b;
+  font-style: normal;
+  display: block;
+  margin-top: 4px;
+}
+
+.curl-ip-warning code {
+  background: rgba(245, 158, 11, 0.15);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-size: 11px;
+}
+
 @media (max-width: 600px) {
   .app {
     padding: 12px;
