@@ -16,6 +16,12 @@
   max-width: 960px;
 }
 
+.player-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
 .change-video-btn {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
@@ -188,5 +194,154 @@
 
   .url-input-card {
     padding: 32px 20px;
+  }
+}
+
+/* Share Control */
+.share-control {
+  position: relative;
+}
+
+.share-btn {
+  display: flex;
+  align-items: center;
+}
+
+.share-panel {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  background: rgba(20, 20, 30, 0.97);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 20px;
+  min-width: 280px;
+  z-index: 20;
+  animation: share-fade-in 0.2s ease;
+}
+
+@keyframes share-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.share-panel h3 {
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  margin: 0 0 16px;
+}
+
+.share-qr {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 16px;
+  padding: 12px;
+  background: #1a1b23;
+  border-radius: 8px;
+}
+
+.share-url-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.share-url-field {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #e5e7eb;
+  font-size: 12px;
+  outline: none;
+  min-width: 0;
+}
+
+.share-url-field:focus {
+  border-color: #818cf8;
+}
+
+.share-copy-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 6px;
+  color: #ccc;
+  cursor: pointer;
+  transition:
+    background 0.15s,
+    color 0.15s;
+  flex-shrink: 0;
+}
+
+.share-copy-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+}
+
+.share-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.share-action-btn {
+  display: flex;
+  align-items: center;
+  padding: 7px 14px;
+  background: rgba(129, 140, 248, 0.12);
+  border: 1px solid rgba(129, 140, 248, 0.25);
+  border-radius: 6px;
+  color: #818cf8;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.share-action-btn:hover {
+  background: rgba(129, 140, 248, 0.2);
+}
+
+.share-action-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.share-error {
+  color: #ef4444;
+  font-size: 12px;
+}
+
+@media (max-width: 600px) {
+  .share-panel {
+    right: auto;
+    left: 50%;
+    transform: translateX(-50%);
+    min-width: 260px;
+  }
+
+  @keyframes share-fade-in {
+    from {
+      opacity: 0;
+      transform: translateX(-50%) translateY(4px);
+    }
+    to {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
   }
 }

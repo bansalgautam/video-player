@@ -1,6 +1,7 @@
 import { useSearchParams } from "react-router";
 import { VideoPlayer } from "./components/VideoPlayer";
 import { UrlInput } from "./components/UrlInput";
+import { ShareControl } from "./components/ShareControl";
 import "./App.css";
 
 function App() {
@@ -20,9 +21,12 @@ function App() {
       {videoUrl ? (
         <div className="player-wrapper">
           <VideoPlayer src={videoUrl} />
-          <button className="change-video-btn" onClick={handleClear}>
-            Change Video
-          </button>
+          <div className="player-actions">
+            <button className="change-video-btn" onClick={handleClear}>
+              Change Video
+            </button>
+            <ShareControl videoUrl={videoUrl} />
+          </div>
         </div>
       ) : (
         <UrlInput onLoad={handleLoad} />
