@@ -1,12 +1,41 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
+import { parseCurl } from "../utils/curlParser";
 
 interface UrlInputProps {
-  onLoad: (url: string) => void;
+  onLoad: (url: string, headers?: Record<string, string>) => void;
 }
 
 export function UrlInput({ onLoad }: UrlInputProps) {
   const [url, setUrl] = useState("");
   const [error, setError] = useState("");
+  const [showCurl, setShowCurl] = useState(false);
+  const [curlText, setCurlText] = useState("");
+  const [customHeaders, setCustomHeaders] = useState<Record<string, string>>(
+    {},
+  );
+
+  const headerCount = Object.keys(customHeaders).length;
+
+  const handleCurlChange = useCallback((value: string) => {
+    setCurlText(value);
+    const trimmed = value.trim();
+    if (trimmed.toLowerCase().startsWith("curl")) {
+      const parsed = parseCurl(trimmed);
+      if (parsed.url) {
+        setUrl(parsed.url);
+        setError("");
+      }
+      setCustomHeaders(parsed.headers);
+    } else {
+      setCustomHeaders({});
+    }
+  }, []);
+
+  const clearHeaders = useCallback(() => {
+    setCurlText("");
+    setCustomHeaders({});
+    setShowCurl(false);
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,7 +58,7 @@ export function UrlInput({ onLoad }: UrlInputProps) {
     }
 
     setError("");
-    onLoad(trimmed);
+    onLoad(trimmed, headerCount > 0 ? customHeaders : undefined);
   };
 
   return (
@@ -58,6 +87,65 @@ export function UrlInput({ onLoad }: UrlInputProps) {
             autoFocus
           />
           {error && <span className="url-input-error">{error}</span>}
+
+          <button
+            type="button"
+            className="curl-toggle-btn"
+            onClick={() => setShowCurl(!showCurl)}
+          >
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+              <path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z" />
+            </svg>
+            {showCurl ? "Hide curl import" : "Import from curl"}
+            {headerCount > 0 && !showCurl && (
+              <span className="header-badge">{headerCount} headers</span>
+            )}
+          </button>
+
+          {showCurl && (
+            <div className="curl-section">
+              <textarea
+                value={curlText}
+                onChange={(e) => handleCurlChange(e.target.value)}
+                placeholder={
+                  "Paste a curl command to auto-extract URL and headers...\n\ncurl 'https://example.com/stream.m3u8' \\\n  -H 'Cookie: token=abc' \\\n  -H 'Referer: https://example.com'"
+                }
+                className="curl-textarea"
+                rows={5}
+              />
+              {headerCount > 0 && (
+                <div className="curl-parsed">
+                  <div className="curl-parsed-header">
+                    <span>{headerCount} headers extracted</span>
+                    <button
+                      type="button"
+                      onClick={clearHeaders}
+                      className="curl-clear-btn"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                  <div className="curl-headers-list">
+                    {Object.entries(customHeaders).map(([key, value]) => (
+                      <div key={key} className="curl-header-item">
+                        <span className="curl-header-key">{key}:</span>{" "}
+                        <span className="curl-header-value">
+                          {value.length > 80 ? value.slice(0, 80) + "…" : value}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {headerCount > 0 && (
+                <p className="curl-proxy-notice">
+                  Requests will be proxied through the dev server to attach
+                  these headers.
+                </p>
+              )}
+            </div>
+          )}
+
           <button type="submit" className="url-input-btn">
             Load Video
           </button>

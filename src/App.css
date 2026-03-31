@@ -187,6 +187,130 @@
   word-break: break-all;
 }
 
+/* Curl import section */
+.curl-toggle-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  color: #818cf8;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 0;
+  transition: color 0.2s;
+}
+
+.curl-toggle-btn:hover {
+  color: #a5b4fc;
+}
+
+.header-badge {
+  background: rgba(129, 140, 248, 0.2);
+  color: #818cf8;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  margin-left: 4px;
+}
+
+.curl-section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.curl-textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+  color: #e5e7eb;
+  font-family: "SF Mono", "Fira Code", "Fira Mono", monospace;
+  font-size: 12px;
+  resize: vertical;
+  outline: none;
+  min-height: 80px;
+  line-height: 1.4;
+  box-sizing: border-box;
+}
+
+.curl-textarea::placeholder {
+  color: #6b7280;
+}
+
+.curl-textarea:focus {
+  border-color: #818cf8;
+}
+
+.curl-parsed {
+  background: rgba(129, 140, 248, 0.06);
+  border: 1px solid rgba(129, 140, 248, 0.15);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.curl-parsed-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.curl-parsed-header span {
+  color: #818cf8;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.curl-clear-btn {
+  background: none;
+  border: none;
+  color: #9ca3af;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 6px;
+}
+
+.curl-clear-btn:hover {
+  color: #fff;
+}
+
+.curl-headers-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 120px;
+  overflow-y: auto;
+}
+
+.curl-header-item {
+  font-size: 11px;
+  font-family: "SF Mono", "Fira Code", monospace;
+  line-height: 1.4;
+  color: #9ca3af;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.curl-header-key {
+  color: #c084fc;
+}
+
+.curl-header-value {
+  color: #9ca3af;
+}
+
+.curl-proxy-notice {
+  color: #6b7280;
+  font-size: 12px;
+  margin: 0;
+  font-style: italic;
+}
+
 @media (max-width: 600px) {
   .app {
     padding: 12px;
@@ -242,11 +366,19 @@
 
 .share-qr {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
   margin-bottom: 16px;
   padding: 12px;
   background: #1a1b23;
   border-radius: 8px;
+}
+
+.share-qr-note {
+  margin: 8px 0 0;
+  font-size: 11px;
+  color: #999;
+  text-align: center;
 }
 
 .share-url-row {

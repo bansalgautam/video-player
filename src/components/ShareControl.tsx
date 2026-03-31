@@ -13,7 +13,20 @@ export function ShareControl({ videoUrl }: ShareControlProps) {
   const [shortenError, setShortenError] = useState<string | null>(null);
   const ref = useRef<HTMLDivElement>(null);
 
-  const shareUrl = `${window.location.origin}${window.location.pathname}?url=${encodeURIComponent(videoUrl)}`;
+  const shareUrl = window.location.href;
+
+  // Build a shorter URL without the headers param for QR code
+  const qrUrl = (() => {
+    try {
+      const u = new URL(window.location.href);
+      u.searchParams.delete("h");
+      return u.toString();
+    } catch {
+      return shareUrl;
+    }
+  })();
+
+  const hasHeaders = new URL(window.location.href).searchParams.has("h");
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
@@ -113,13 +126,19 @@ export function ShareControl({ videoUrl }: ShareControlProps) {
           {/* QR Code */}
           <div className="share-qr">
             <QRCodeSVG
-              value={displayUrl}
+              value={shortenedUrl || qrUrl}
               size={160}
               bgColor="#1a1b23"
               fgColor="#ffffff"
               level="M"
               marginSize={2}
             />
+            {hasHeaders && !shortenedUrl && (
+              <p className="share-qr-note">
+                QR code contains URL only. Copy the full link to include
+                headers.
+              </p>
+            )}
           </div>
 
           {/* URL display + copy */}

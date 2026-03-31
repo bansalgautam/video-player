@@ -120,7 +120,7 @@ export function VideoPlayer({ src }: VideoPlayerProps) {
     return () => window.removeEventListener("keydown", handleKey);
   }, [actions, state.currentTime, state.volume, showControls, showSeekPreview]);
 
-  const isHls = /\.m3u8($|\?)/.test(src);
+  const isHls = /\.m3u8($|\?|%)/i.test(src);
 
   return (
     <div
