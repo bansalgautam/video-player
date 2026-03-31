@@ -55,7 +55,7 @@ export function useVideoPlayer(src: string) {
     activeSubtitleTrack: -1,
   });
 
-  const isHls = /\.m3u8($|\?|%)/i.test(src);
+  const isHls = /\.m3u8($|[?%&])/i.test(src);
 
   // Cleanup HLS instance
   const destroyHls = useCallback(() => {

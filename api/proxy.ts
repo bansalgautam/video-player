@@ -1,5 +1,4 @@
-import type { Plugin } from "vite";
-import type { IncomingMessage, ServerResponse } from "node:http";
+import type { VercelRequest, VercelResponse } from "@vercel/node";
 
 function resolveUrl(url: string, baseUrl: string): string {
   if (url.startsWith("http://") || url.startsWith("https://")) return url;
@@ -38,7 +37,6 @@ function rewriteM3u8(
     .join("\n");
 }
 
-// Response headers safe to forward from upstream
 const FORWARD_HEADERS = [
   "content-type",
   "content-length",
@@ -49,56 +47,35 @@ const FORWARD_HEADERS = [
   "last-modified",
 ];
 
-async function handleProxy(
-  req: IncomingMessage,
-  res: ServerResponse,
-  next: () => void,
-) {
-  const url = new URL(req.url!, `http://${req.headers.host}`);
-
-  if (url.pathname !== "/api/proxy") {
-    next();
-    return;
-  }
-
+export default async function handler(req: VercelRequest, res: VercelResponse) {
   // CORS
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, Range");
 
   if (req.method === "OPTIONS") {
-    res.statusCode = 204;
-    res.end();
-    return;
+    return res.status(204).end();
   }
 
   if (req.method !== "GET") {
-    res.statusCode = 405;
-    res.end("Method not allowed");
-    return;
+    return res.status(405).end("Method not allowed");
   }
 
-  const targetUrl = url.searchParams.get("url");
-  const headersB64 = url.searchParams.get("h");
+  const targetUrl = req.query.url as string | undefined;
+  const headersB64 = req.query.h as string | undefined;
 
   if (!targetUrl) {
-    res.statusCode = 400;
-    res.end("Missing url parameter");
-    return;
+    return res.status(400).end("Missing url parameter");
   }
 
   // Validate URL to prevent SSRF
   try {
     const parsed = new URL(targetUrl);
     if (!["http:", "https:"].includes(parsed.protocol)) {
-      res.statusCode = 400;
-      res.end("Only http/https URLs allowed");
-      return;
+      return res.status(400).end("Only http/https URLs allowed");
     }
   } catch {
-    res.statusCode = 400;
-    res.end("Invalid target URL");
-    return;
+    return res.status(400).end("Invalid target URL");
   }
 
   // Decode headers from base64
@@ -109,16 +86,14 @@ async function handleProxy(
         Buffer.from(headersB64, "base64").toString("utf-8"),
       );
     } catch {
-      res.statusCode = 400;
-      res.end("Invalid headers parameter");
-      return;
+      return res.status(400).end("Invalid headers parameter");
     }
   }
 
   // Build fetch headers
   const fetchHeaders: Record<string, string> = { ...customHeaders };
   if (req.headers.range) {
-    fetchHeaders["Range"] = req.headers.range;
+    fetchHeaders["Range"] = req.headers.range as string;
   }
 
   try {
@@ -127,8 +102,8 @@ async function handleProxy(
       redirect: "follow",
     });
 
-    // Forward status code (important for 206 Partial Content)
-    res.statusCode = upstream.status;
+    // Forward status
+    res.status(upstream.status);
 
     // Forward safe response headers
     for (const name of FORWARD_HEADERS) {
@@ -136,7 +111,7 @@ async function handleProxy(
       if (value) res.setHeader(name, value);
     }
 
-    // Detect m3u8 response
+    // Detect m3u8
     const ct = upstream.headers.get("content-type") || "";
     const isM3u8 =
       /\.m3u8($|\?|%3F)/i.test(targetUrl) ||
@@ -147,60 +122,18 @@ async function handleProxy(
       const text = await upstream.text();
       const baseUrl = new URL(".", targetUrl).href;
       const rewritten = rewriteM3u8(text, baseUrl, headersB64);
-      const buf = Buffer.from(rewritten);
       res.setHeader("Content-Type", "application/vnd.apple.mpegurl");
-      res.setHeader("Content-Length", buf.length);
-      res.end(buf);
-    } else {
-      // Stream binary response
-      if (!upstream.body) {
-        res.end();
-        return;
-      }
-      const reader = upstream.body.getReader();
-      try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          res.write(Buffer.from(value));
-        }
-      } catch {
-        // Client disconnected or upstream error
-      }
-      res.end();
+      return res.send(rewritten);
     }
+
+    // Stream binary response
+    const arrayBuf = await upstream.arrayBuffer();
+    return res.send(Buffer.from(arrayBuf));
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Unknown error";
     console.error(`[proxy] Error fetching ${targetUrl}:`, message);
     if (!res.headersSent) {
-      res.statusCode = 502;
-      res.end(`Proxy error: ${message}`);
+      return res.status(502).end(`Proxy error: ${message}`);
     }
   }
-}
-
-function proxyMiddleware(
-  req: IncomingMessage,
-  res: ServerResponse,
-  next: () => void,
-) {
-  handleProxy(req, res, next).catch((err) => {
-    console.error("[proxy]", err);
-    if (!res.headersSent) {
-      res.statusCode = 500;
-      res.end("Internal proxy error");
-    }
-  });
-}
-
-export function proxyPlugin(): Plugin {
-  return {
-    name: "video-proxy",
-    configureServer(server) {
-      server.middlewares.use(proxyMiddleware);
-    },
-    configurePreviewServer(server) {
-      server.middlewares.use(proxyMiddleware);
-    },
-  };
 }
